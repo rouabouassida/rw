@@ -1,7 +1,4 @@
-import express, { json } from "express";
-import crypto from "crypto";
 import User from "../models/user.js";
-import jsonwebtoken from "jsonwebtoken";
 import { sendNewAccountInfo, sendUpdateInfo } from "../helpers/sendEmail.js";
 import { InhashData, hashData } from "../helpers/bcrypt.js";
 
@@ -13,24 +10,25 @@ const login = async (req, res) => {
   }
 
   try {
-    const user = await User.findOne({ email });
+    const foundedUser = await User.findOne({ email });
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    if (!foundedUser) {
+      return res.status(404).json({ message: "Email incorrect" });
+    }
+    const isPasswordMatch = await bcrypt.compare(
+      password,
+      foundedUser.password
+    );
+    if (!isPasswordMatch) {
+      return res.status(400).send({ error: "Invalid login credentials" });
     }
 
-    const passwordMatch = await crypto.compare(password, user.password);
-
-    if (passwordMatch) {
-      return res
-        .status(200)
-        .json({ email: user.email, fullname: user.fullname });
-    } else {
-      return res.status(401).json({ message: "Password incorrect" });
-    }
+    res
+      .status(200)
+      .json({ email: foundedUser.email, fullname: foundedUser.fullname });
   } catch (error) {
-    console.error("Internal server error:", error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.log(error);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
@@ -75,9 +73,9 @@ const generatePassword = (length) => {
 
 // Votre fonction de création d'employé
 const ajouterEmploye = async (req, res) => {
-  const { name, email, password } = req.body;
+  const { fullname, email, password } = req.body;
 
-  if (!name || !email || !password) {
+  if (!fullname || !email || !password) {
     return res.status(400).json({ message: "Tous les champs sont requis !" });
   }
 
@@ -90,14 +88,14 @@ const ajouterEmploye = async (req, res) => {
     const hashedPassword = await hashData(password);
 
     const newUser = new User({
-      name,
+      fullname,
       email,
       password: hashedPassword,
     });
 
     await newUser.save();
 
-    sendNewAccountInfo(email, name, password); // Envoi des informations du compte par email
+    sendNewAccountInfo(email, fullname, password); // Envoi des informations du compte par email
 
     return res.status(201).json({ message: "Employé ajouté avec succès !" });
   } catch (error) {
